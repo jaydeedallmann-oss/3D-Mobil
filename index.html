@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0f1f2b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Gewässer-3D mobil</title>
+<style>
+:root{--bg:#0f1f2b;--panel:#16293a;--panel2:#1d3340;--line:#2a4256;--fg:#eaf3fb;--mut:#9fb6c9;--acc:#39a7d6;--acc2:#2e9d52;--danger:#e5574d}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--fg);font:15px/1.4 system-ui,Segoe UI,Roboto,sans-serif;overscroll-behavior:none}
+#scene{position:fixed;inset:0;touch-action:none}
+#scene canvas{display:block}
+.bar{position:fixed;left:0;right:0;display:flex;align-items:center;gap:8px;padding:calc(env(safe-area-inset-top) + 8px) 10px 8px;z-index:20;background:linear-gradient(#0f1f2bdd,#0f1f2b00);pointer-events:none}
+.bar>*{pointer-events:auto}
+.bar .title{font-weight:700;font-size:16px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-shadow:0 1px 3px #000a}
+button{font:inherit;color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px;cursor:pointer}
+button:active{filter:brightness(1.25)}
+button.icon{width:44px;height:44px;padding:0;font-size:19px;display:grid;place-items:center}
+button.primary{background:var(--acc);border-color:var(--acc);color:#04121b;font-weight:700}
+button.on{background:var(--acc);border-color:var(--acc);color:#04121b}
+button.ghost{background:#16293a99}
+.dock{position:fixed;left:0;right:0;bottom:0;z-index:20;display:flex;flex-wrap:wrap;gap:8px;justify-content:center;align-items:center;padding:8px 10px calc(env(safe-area-inset-bottom) + 10px);background:linear-gradient(#0f1f2b00,#0f1f2bdd)}
+.dock .slider{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px 12px}
+.dock input[type=range]{width:120px;accent-color:var(--acc)}
+.chip{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 58px);transform:translateX(-50%);z-index:19;background:#0c1922e6;border:1px solid var(--line);border-radius:999px;padding:7px 14px;font-weight:600;text-shadow:0 1px 2px #000;box-shadow:0 2px 10px #0006;max-width:92vw;text-align:center}
+.chip b{color:var(--acc)}
+.sheet{position:fixed;inset:0;z-index:40;background:#0a141ccc;display:none;align-items:flex-end}
+.sheet.open{display:flex}
+.sheet .card{background:var(--panel);width:100%;max-height:85vh;overflow:auto;border-radius:18px 18px 0 0;border-top:1px solid var(--line);padding:16px 16px calc(env(safe-area-inset-bottom) + 16px)}
+.sheet h2{margin:.1em 0 .5em;font-size:19px}
+.sheet h3{margin:1em 0 .3em;font-size:15px;color:var(--acc)}
+.row{display:flex;gap:8px;align-items:center}
+.row.wrap{flex-wrap:wrap}
+.spacer{flex:1}
+.pkg{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--line);border-radius:12px;margin:6px 0;background:var(--panel2)}
+.pkg .name{flex:1;font-weight:600}
+.pkg .meta{color:var(--mut);font-size:12px}
+.muted{color:var(--mut)}
+.small{font-size:13px}
+.tiny{font-size:12px;color:var(--mut)}
+.hot{display:flex;align-items:center;gap:8px;padding:8px;border-bottom:1px solid var(--line)}
+.hot .name{flex:1}
+dialog{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:16px;max-width:92vw;width:440px;padding:16px}
+dialog::backdrop{background:#0a141ccc}
+dialog input[type=text]{width:100%;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--fg);font:inherit}
+.center{position:fixed;inset:0;display:grid;place-items:center;z-index:15;padding:24px;text-align:center}
+.center .box{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:26px 22px;max-width:380px}
+.center h1{font-size:20px;margin:.2em 0 .4em}
+.hidden{display:none!important}
+.guidedot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--line);margin:0 3px}
+.guidedot.active{background:var(--acc)}
+.statusdot{width:9px;height:9px;border-radius:50%;background:var(--danger);display:inline-block;margin-right:6px;vertical-align:middle}
+.statusdot.ok{background:var(--acc2)}
+</style>
+</head>
+<body>
+<div id="scene"></div>
+
+<!-- Startansicht, wenn kein Paket geladen -->
+<div class="center" id="welcome">
+ <div class="box">
+  <h1>Gewässer-3D mobil</h1>
+  <p class="small muted">Dein Gewässer als 3D-Relief mit Luftbild – offline am Wasser. Lade ein Gewässerpaket (.uwpaket) aus dem Desktop-Tool.</p>
+  <button class="primary" id="welcomeImport" style="width:100%;margin-top:10px">Gewässerpaket laden</button>
+  <button class="ghost" id="welcomeHelp" style="width:100%;margin-top:8px">Kurze Einführung</button>
+ </div>
+</div>
+
+<!-- Kopfzeile -->
+<div class="bar hidden" id="topbar">
+ <button class="icon" id="menuBtn" aria-label="Menü">☰</button>
+ <div class="title" id="pkgTitle">—</div>
+ <button class="icon" id="helpBtn" aria-label="Hilfe">?</button>
+</div>
+
+<div class="chip hidden" id="depthChip"><span class="statusdot" id="gpsDot"></span><span id="depthText">GPS aus</span></div>
+
+<!-- Steuerleiste unten -->
+<div class="dock hidden" id="dock">
+ <button id="view2d3d">2D</button>
+ <button id="waterBtn" class="on">Wasser</button>
+ <button id="lineBtn" class="on">Linien</button>
+ <button id="steepBtn">Steil</button>
+ <button id="gpsBtn">GPS</button>
+ <button id="hotBtn">＋ Hotspot</button>
+ <div class="slider"><span class="tiny">Höhe</span><input type="range" id="exag" min="1" max="30" step="1" value="12"><span class="tiny" id="exagVal">12×</span></div>
+</div>
+
+<!-- Menü-Sheet -->
+<div class="sheet" id="menuSheet">
+ <div class="card">
+  <div class="row"><h2 style="flex:1">Gewässer</h2><button id="menuClose">Schließen</button></div>
+  <button class="primary" id="importBtn" style="width:100%">Gewässerpaket laden (.uwpaket)</button>
+  <input type="file" id="fileInput" accept=".uwpaket,.zip,application/zip" hidden>
+  <div id="pkgList"></div>
+  <h3>Darstellung</h3>
+  <div class="row" style="gap:10px"><span class="small" style="width:120px">Linienabstand</span><input type="range" id="lineIv" min="0.5" max="5" step="0.5" value="1" style="flex:1;accent-color:var(--acc)"><span class="tiny" id="lineIvVal" style="width:46px;text-align:right">1,0 m</span></div>
+  <div class="row" style="gap:10px"><span class="small" style="width:120px">Steil ab</span><input type="range" id="steepIv" min="5" max="60" step="5" value="20" style="flex:1;accent-color:var(--acc)"><span class="tiny" id="steepIvVal" style="width:46px;text-align:right">20 %</span></div>
+  <h3>Hotspots im aktuellen Gewässer</h3>
+  <div id="hotList" class="small"></div>
+  <div class="row wrap" style="margin-top:14px">
+   <button id="tutorialBtn">Einführung</button>
+   <button id="aboutBtn">Hilfe</button>
+   <button id="historyBtn">Versionen</button>
+   <div class="spacer"></div>
+  </div>
+  <p class="tiny" id="storageNote" style="margin-top:10px"></p>
+ </div>
+</div>
+
+<!-- Dialoge -->
+<dialog id="tutorialDlg">
+ <h2 id="guideTitle"></h2>
+ <p id="guideBody" class="small"></p>
+ <div class="row" style="margin-top:14px"><div id="guideDots"></div><div class="spacer"></div><button id="guidePrev">Zurück</button><button class="primary" id="guideNext">Weiter</button></div>
+</dialog>
+
+<dialog id="helpDlg">
+ <div class="row"><h2 style="flex:1">Hilfe</h2><button id="helpClose">OK</button></div>
+ <div class="small" id="helpBody"></div>
+</dialog>
+
+<dialog id="historyDlg">
+ <div class="row"><h2 style="flex:1">Versionsverlauf</h2><button id="historyClose">OK</button></div>
+ <div class="small" id="historyBody"></div>
+</dialog>
+
+<dialog id="hotDlg">
+ <h2>Hotspot setzen</h2>
+ <p class="tiny" id="hotCoord"></p>
+ <input type="text" id="hotName" placeholder="Name (z. B. Kante 4 m, Stein, Krautkante)" maxlength="60">
+ <div class="row" style="margin-top:12px"><div class="spacer"></div><button id="hotCancel">Abbrechen</button><button class="primary" id="hotSave">Speichern</button></div>
+</dialog>
+
+<script src="lib/three.min.js"></script>
+<script src="lib/colors.js"></script>
+<script src="lib/package.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
